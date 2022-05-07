@@ -1,0 +1,11 @@
+.callkit-component-avatar{
+    width: 100px;
+    height: 100px;
+    overflow: hidden;
+    border-radius: 50%;
+    &>img{
+        position: relative;
+        width: 100%;
+        height: 100%;
+    }
+}
