@@ -6,11 +6,12 @@ import head from '../../assets/images/head.jpg';
 import { useEffect, useState } from 'react';
 import MiniWindow from '../miniWindow';
 import React, { useContext } from 'react';
-import { close, WebIM, client, join } from '../conf'
+import { WebIM, client, join, callManager } from '../callManager'
 import { useSelector, useDispatch } from 'react-redux';
 import { updateConfr, setCallStatus, CALLSTATUS } from '../../redux/reducer'
 import { answerCall } from '../message'
 import { CallkitContext } from '../../index'
+import store from '../../redux';
 function VideoCall() {
 	const [selfScreenFull, setScreen] = useState(true);
 	const swichScreen = () => {
@@ -42,7 +43,6 @@ function VideoCall() {
 		</div>
 	);
 }
-
 function SingleCall(props) {
 	const CallkitProps = useContext(CallkitContext);
 	const { style } = props;
@@ -51,8 +51,9 @@ function SingleCall(props) {
 	const state = useSelector(state => state)
 	const dispatch = useDispatch();
 
+	const { client } = callManager
+	callManager.setCallKitProps(CallkitProps)
 	const addListener = () => {
-		console.log('注册监听 -----')
 		client.on("user-published", async (user, mediaType) => {
 			console.log('-- 对方发布流 -- ')
 			CallkitProps.onStateChange && CallkitProps.onStateChange({
@@ -85,13 +86,13 @@ function SingleCall(props) {
 
 		client.on("user-left", (user, mediaType) => {
 			console.log('-- 对方已离开 --')
+			let state = store.getState()
 			CallkitProps.onStateChange && CallkitProps.onStateChange({
 				type: "user-left",
 				user,
 				mediaType
 			})
-			hangup()
-			dispatch(setCallStatus(CALLSTATUS.idle))
+			hangup('user-left')
 		})
 
 		client.on("user-unpublished", (user, mediaType) => {
@@ -102,7 +103,6 @@ function SingleCall(props) {
 				mediaType
 			})
 		});
-
 	}
 
 	useEffect(() => {
@@ -117,11 +117,23 @@ function SingleCall(props) {
 
 	const joinConfr = () => {
 		console.log('join -----', state.confr.channel)
-		join({ channel: state.confr.channel, callType: state.confr.type })
+		// join({ channel: state.confr.channel, callType: state.confr.type })
+		callManager.join()
 	}
 
 	const hangup = () => {
-		close()
+		let state = store.getState()
+		CallkitProps.onStateChange && CallkitProps.onStateChange({
+			type: "hangup",
+			callInfo: {
+				...state.confr,
+				duration: state.callDuration,
+				groupId: state.groupId,
+				groupName: state.groupName
+			}
+		})
+
+		callManager.hangup('normal', true)
 		dispatch(setCallStatus(CALLSTATUS.idle))
 	}
 
@@ -132,20 +144,30 @@ function SingleCall(props) {
 		// if (this.props.gid) {
 		// 	this.props.listGroupMemberAsync({ groupId: this.props.gid })
 		// }
+		CallkitProps.onStateChange && CallkitProps.onStateChange({
+			type: "accept",
+			callInfo: state.confr
+		})
 		clearTimeout(WebIM.rtc.timer)
 	}
 
 	const refuse = () => {
 		answerCall('refuse') // 
 		if (state.callStatus < 7) { //拒接
-			close()
+			callManager.hangup()
 			dispatch(setCallStatus(CALLSTATUS.idle))
 		}
+		CallkitProps.onStateChange && CallkitProps.onStateChange({
+			type: "refuse",
+			callInfo: state.confr,
+			groupId: state.groupId,
+			groupName: state.groupName
+		})
 		clearTimeout(WebIM.rtc.timer)
 	}
 
 	const swichMic = () => {
-		if (state.callStatus < 3) return
+		if (state.callStatus < 5) return
 		setMute((isMute) => !isMute)
 		WebIM.rtc.localAudioTrack.setEnabled(isMute)
 	}

@@ -6,7 +6,7 @@ import React, { useEffect } from 'react';
 import Draggable, { DraggableCore } from 'react-draggable';
 import { useSelector, useDispatch } from 'react-redux';
 import { changeWinSize, CALLSTATUS } from '../../redux/reducer'
-import { WebIM } from '../conf'
+import { WebIM } from '../callManager'
 function MiniWindow(props) {
 	const { className } = props;
 	const dispatch = useDispatch()

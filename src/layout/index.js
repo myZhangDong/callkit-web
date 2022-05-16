@@ -6,13 +6,12 @@ import './index.css';
 import AgoraRTC from 'agora-rtc-sdk-ng';
 import { useSelector, useDispatch } from 'react-redux';
 import classnames from 'classnames';
-import { client, WebIM } from '../modules/conf'
+import { client, WebIM } from '../modules/callManager'
 import MiniWindow from '../modules/miniWindow'
 
 console.log('-----初始化-----');
 
-function Layout({ onAddPerson, onStateChange }) {
-	const dispatch = useDispatch()
+function Layout({ onAddPerson, onStateChange, onInvite }) {
 
 	const size = useSelector((state) => state.windowSize);
 	const callStatus = useSelector((state) => state.callStatus);
@@ -28,6 +27,13 @@ function Layout({ onAddPerson, onStateChange }) {
 	const addPerson = () => {
 		onAddPerson && onAddPerson()
 	}
+
+	useEffect(() => {
+		if (callStatus === 1) {
+			onInvite && onInvite()
+		}
+	}, [callStatus])
+
 	return (
 		callStatus > 0 ?
 			<>

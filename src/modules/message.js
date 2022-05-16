@@ -1,4 +1,4 @@
-import { WebIM, hangup, close } from './conf'
+import { WebIM, hangup, close, callManager } from './callManager'
 import './utils'
 import store from '../redux';
 import { updateConfr, setCallStatus, CALLSTATUS } from '../redux/reducer'
@@ -8,7 +8,7 @@ const manager = {}
 
 export const sendTextMsg = (chatType, to, message, ext) => {
     let option = {
-        chatType: 'singleChat',
+        chatType: chatType,
         type: "txt",
         to: to,
         msg: message,
@@ -23,11 +23,30 @@ export const sendTextMsg = (chatType, to, message, ext) => {
         const { dispatch } = store
         WebIM.rtc.timer = setTimeout(() => {
             console.log('主叫 定时器到期')
-            close()
+            callManager.hangup('timeout', true)
             dispatch(setCallStatus(CALLSTATUS.idle))
         }, 30000)
         console.log('设置定时器')
     }
+}
+
+export const sendCMDMsg = (chatType, to, message, ext) => {
+    var id = WebIM.conn.getUniqueId();            //生成本地消息id
+    var msg = new WebIM.message('cmd', id); //创建命令消息
+    msg.set({
+        to: to,
+        action: 'rtcCall',
+        ext: ext,
+        success: function (id, serverMsgId) {
+            dispatch(setCallStatus(CALLSTATUS.alerting))
+        },
+        fail: function (e) {
+            console.log("Fail");
+        }
+    });
+
+    console.log('被叫发出的alert: ', msg.body)
+    WebIM.conn.send(msg.body);
 }
 
 // callee
@@ -59,7 +78,7 @@ export const sendAlerting = (to, calleeDevId, callId) => {
     WebIM.conn.send(msg.body);
     WebIM.rtc.timer = setTimeout(() => {
         console.log('被叫 定时器到期')
-        hangup()
+        callManager.hangup('timeout')
         dispatch(setCallStatus(CALLSTATUS.idle))
     }, 30000)
     console.log('设置定时器')
@@ -67,6 +86,7 @@ export const sendAlerting = (to, calleeDevId, callId) => {
 
 // caller
 const confirmRing = (to, calleeDevId, callerDevId, callId) => {
+    console.log('confirmRing')
     const { getState, dispatch } = store
     let confr = getState().confr
     let currentCallId = confr.callId
@@ -123,7 +143,6 @@ export const answerCall = (result, info) => {
     console.log('send answerCall')
     const { getState, dispatch } = store
     info = info || {}
-    console.log('111111', result, info.currentCallId, info.callerDevId, info.to)
     console.log(getState().confr, 'confr')
     var id = WebIM.conn.getUniqueId();            //生成本地消息id
     var msg = new WebIM.message('cmd', id); //创建命令消息
@@ -205,7 +224,7 @@ const confirmCallee = (to, calleeDevId, result) => {
 }
 
 export const cancelCall = (to) => {
-    console.log('cancelCall')
+    console.log('cancelCall', to)
     const { getState, dispatch } = store
     var id = WebIM.conn.getUniqueId();
     var msg = new WebIM.message('cmd', id);
@@ -245,6 +264,7 @@ export const addListener = () => {
             const state = getState()
             const { conf, callStatus } = state
             let { from, to } = message
+            if (message.chatType !== 'singleChat') return;
             if (message.ext && message.ext.action === 'invite') {
                 if (message.from == WebIM.conn.context.jid.name) {
                     return // 自己在另一端发出的邀请
@@ -253,21 +273,27 @@ export const addListener = () => {
                 if (callStatus > CALLSTATUS.idle) { // 正忙
                     if (message.ext.callId == conf.callId) { // 多人会议中邀请别人
                         // store.dispatch(VideoCallAcctions.sendAlerting(from, message.ext.callerDevId, message.ext.callId)) // 回复alerting消息
-                        sendAlerting(from, message.ext.callerDevId, message.ext.callId)
+
+                        // sendAlerting(from, message.ext.callerDevId, message.ext.callId)
+
                         // store.dispatch(VideoCallAcctions.setCallStatus(CALLSTATUS.alerting)) // 更改为alerting状态
+                        // 收到邀请回调 onInvite
+                        dispatch(setCallStatus(CALLSTATUS.inviting))
                     } else {
                         // return store.dispatch(VideoCallAcctions.answerCall('busy', { callId: message.ext.callId, callerDevId: message.ext.callerDevId, to: from }))
                         answerCall('busy', { callId: message.ext.callId, callerDevId: message.ext.callerDevId, to: from })
                     }
                 } else {
                     try {
-                        manager.sendAlerting(from, message.ext.callerDevId, message.ext.callId) // 回复alerting消息
+                        // manager.sendAlerting(from, message.ext.callerDevId, message.ext.callId) // 回复alerting消息
+
+                        // 收到邀请回调 onInvite
+                        dispatch(setCallStatus(CALLSTATUS.inviting))
                     } catch (e) {
                         console.log('shibai', e)
                     }
                     dispatch(updateConfr(message))
                 }
-
             }
         },
 
@@ -284,6 +310,38 @@ export const addListener = () => {
                 let callId = '';
                 let callVideo = store.getState();
                 switch (msgInfo.action) {
+                    case "invite":
+                        console.log('收到群组邀请得消息', msg)
+                        debugger
+                        if (msg.from == WebIM.conn.context.jid.name) {
+                            return // 自己在另一端发出的邀请
+                        }
+                        const state = getState()
+                        const { conf, callStatus } = state
+
+                        let { from, to } = msg
+
+                        if (callStatus > CALLSTATUS.idle) { // 正忙
+                            console.warn('正忙', callStatus)
+                            if (msgInfo.callId == conf.callId) { // 多人会议中邀请别人
+                                // sendAlerting(from, msgInfo.callerDevId, msgInfo.callId)
+                                // 收到邀请回调 onInvite
+                                dispatch(setCallStatus(CALLSTATUS.inviting))
+                            } else {
+                                answerCall('busy', { callId: msgInfo.callId, callerDevId: msgInfo.callerDevId, to: from })
+                            }
+                        }
+
+                        // 收到邀请回调 onInvite
+                        dispatch(setCallStatus(CALLSTATUS.inviting))
+
+                        // manager.sendAlerting(from, msgInfo.callerDevId, msgInfo.callId) // 回复alerting消息
+
+                        dispatch(updateConfr({
+                            from,
+                            to,
+                            ext: msgInfo
+                        }))
                     case "alert":
                         deviceId = msgInfo.calleeDevId
                         callerDevId = msgInfo.callerDevId
@@ -302,7 +360,7 @@ export const addListener = () => {
                         if (!msgInfo.status && callVideo.callStatus < CALLSTATUS.receivedConfirmRing) {
                             console.warn('邀请已失效')
                             dispatch(setCallStatus(CALLSTATUS.idle))
-                            hangup()
+                            callManager.hangup('invitation has expired')
                             return
                         }
                         deviceId = msgInfo.calleeDevId
@@ -336,7 +394,7 @@ export const addListener = () => {
 
                             if (callVideo.confr.type !== 2) { // 单人情况挂断，多人不挂断
                                 confirmCallee(msg.from, deviceId, msgInfo.result)
-                                hangup()
+                                callManager.hangup(msgInfo.result)
                                 dispatch(setCallStatus(CALLSTATUS.idle))
                             }
                         } else {
@@ -347,7 +405,7 @@ export const addListener = () => {
                         console.log('收到confirmCallee', msg)
                         if (msgInfo.calleeDevId != WebIM.conn.context.jid.clientResource) {
                             if (msg.to == WebIM.conn.context.jid.name) {
-                                hangup()
+                                callManager.hangup('processed on other devices')
                                 dispatch(setCallStatus(CALLSTATUS.idle))
                                 return console.error('已在其他设备处理')
                             }
@@ -356,7 +414,7 @@ export const addListener = () => {
 
                         if (msg.ext.result != 'accept' && callVideo.callStatus != 7) {
                             // 不在通话中收到 busy refuse时挂断
-                            hangup()
+                            callManager.hangup('nomal')
                             dispatch(setCallStatus(CALLSTATUS.idle))
                             return
                         }
@@ -373,7 +431,7 @@ export const addListener = () => {
                             return // 多端情况另一端的消息
                         }
                         if (msg.from == callVideo.confr.callerIMName) {
-                            hangup()
+                            callManager.hangup('nomal')
                             dispatch(setCallStatus(CALLSTATUS.idle))
                         }
                         break;
@@ -383,7 +441,6 @@ export const addListener = () => {
                 }
             }
         }
-
     })
 }
 manager.sendAlerting = sendAlerting

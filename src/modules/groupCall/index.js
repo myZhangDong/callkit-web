@@ -9,7 +9,7 @@ import Button from '../../components/button';
 import { useSelector, useDispatch } from 'react-redux';
 import { updateConfr, setCallStatus, CALLSTATUS, updateJoinedMembers, setUidToUserId } from '../../redux/reducer'
 import { answerCall } from '../message'
-import { close, WebIM, client, join, getConfDetail } from '../conf'
+import { WebIM, callManager } from '../callManager'
 import store from '../../redux';
 import { CallkitContext } from '../../index'
 function VideoCall(props) {
@@ -133,35 +133,31 @@ function GroupCall(props) {
 			}
 		}
 	}
-
+	callManager.setCallKitProps(CallkitProps)
 	async function addListener() {
 		WebIM.rtc.client.on("user-published", async (user, mediaType) => {
 			console.log('有远端画面 -------- ')
-			CallkitProps.onStateChange && CallkitProps.onStateChange(user, mediaType)
+			CallkitProps.onStateChange && CallkitProps.onStateChange({
+				type: "user-published",
+				user,
+				mediaType
+			})
 			console.log(user, mediaType) // user - {uid: 1232}
 			// 开始订阅远端用户。
 			if (uid2userids[user.uid]) {
-				user.uid2userid = uid2userids[user.uid] // user.uid2userid - im user id
+				user.uid2userid = uid2userids[user.uid] // user.uid2userid - im user
 			} else {
-				const members = await getConfDetail()
-				dispatch(setUidToUserId(members))
+				// const members = await getConfDetail()
+				// dispatch(setUidToUserId(members))
 
-				user.uid2userid = members[user.uid]
+				// user.uid2userid = members[user.uid]
 			}
 			await WebIM.rtc.client.subscribe(user, mediaType);
 
 			let videoElm = ''
-			// let exist = false;
-
-			// joinedMembers.forEach((item, index) => {
-			// 	if (item.name === user.uid2userid) {
-			// 		exist = true
-			// 	}
-			// })
 
 			let joined = {}
-			// if (!exist) {
-			// let joinedMembersCp = [...joinedMembers]
+
 			joined = {
 				name: user.uid2userid,
 				videoElm: 'video' + user.uid2userid,
@@ -171,9 +167,7 @@ function GroupCall(props) {
 			}
 			videoElm = 'video' + user.uid2userid;
 
-			// joinedMembersCp.push(joined)
 			dispatch(updateJoinedMembers(joined))
-			// }
 
 			// 表示本次订阅的是视频。
 			if (mediaType === "video") {
@@ -218,11 +212,6 @@ function GroupCall(props) {
 				return item.name !== user.uid2userid
 			});
 			dispatch(updateJoinedMembers(joinCurrent))
-
-			if (state.joinedMembers.length < 2) {
-				console.log('挂断前', state.joinedMembers, joinCurrent)
-				hangup()
-			}
 		})
 
 		WebIM.rtc.client.enableAudioVolumeIndicator();
@@ -255,10 +244,11 @@ function GroupCall(props) {
 
 
 	const joinConfr = async () => {
-		await join({ channel: state.confr.channel, callType: state.confr.type })
-		const members = await getConfDetail()
-		console.log('joinConfr +++', members) // {12312: zd1}
-		dispatch(setUidToUserId(members))
+		// await join({ channel: state.confr.channel, callType: state.confr.type })
+		await callManager.join()
+		// const members = await getConfDetail()
+		// console.log('joinConfr +++', members) // {12312: zd1}
+		// dispatch(setUidToUserId(members))
 	}
 
 	useEffect(() => {
@@ -270,13 +260,26 @@ function GroupCall(props) {
 
 
 	const hangup = () => {
-		close()
+		CallkitProps.onStateChange && CallkitProps.onStateChange({
+			type: "hangup",
+			callInfo: {
+				...state.confr,
+				duration: state.callDuration,
+				groupId: state.groupId,
+				groupName: state.groupName
+			}
+		})
+		callManager.hangup('normal', true)
 		dispatch(setCallStatus(CALLSTATUS.idle))
 	}
 
 	const accept = () => {
 		answerCall('accept')
 		dispatch(setCallStatus(CALLSTATUS.answerCall)) // 5
+		CallkitProps.onStateChange && CallkitProps.onStateChange({
+			type: "accept",
+			callInfo: state.confr
+		})
 
 		clearTimeout(WebIM.rtc.timer)
 	}
@@ -284,10 +287,15 @@ function GroupCall(props) {
 	const refuse = () => {
 		answerCall('refuse') // 
 		if (state.callStatus < 7) { //拒接
-			close()
+			callManager.hangup()
 			dispatch(setCallStatus(CALLSTATUS.idle))
 		}
-
+		CallkitProps.onStateChange && CallkitProps.onStateChange({
+			type: "refuse",
+			callInfo: state.confr,
+			groupId: state.groupId,
+			groupName: state.groupName
+		})
 		clearTimeout(WebIM.rtc.timer)
 	}
 

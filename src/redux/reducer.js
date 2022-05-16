@@ -1,5 +1,5 @@
 import { createSlice } from '@reduxjs/toolkit';
-import { WebIM } from '../modules/conf'
+import { WebIM } from '../modules/callManager'
 export const CALLSTATUS = {
 	idle: 0,
 	inviting: 1,
@@ -50,6 +50,7 @@ export const counterSlice = createSlice({
 			console.log('--updateConfr--', action)
 			let msg = action.payload
 			let confrInfo = action.payload.ext || {}
+			// let confrInfo = msg.customExts || {}
 			let groupId
 			let gName
 			let confr = {
