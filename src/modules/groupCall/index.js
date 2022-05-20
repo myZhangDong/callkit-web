@@ -260,15 +260,15 @@ function GroupCall(props) {
 
 
 	const hangup = () => {
-		CallkitProps.onStateChange && CallkitProps.onStateChange({
-			type: "hangup",
-			callInfo: {
-				...state.confr,
-				duration: state.callDuration,
-				groupId: state.groupId,
-				groupName: state.groupName
-			}
-		})
+		// CallkitProps.onStateChange && CallkitProps.onStateChange({
+		// 	type: "hangup",
+		// 	callInfo: {
+		// 		...state.confr,
+		// 		duration: state.callDuration,
+		// 		groupId: state.groupId,
+		// 		groupName: state.groupName
+		// 	}
+		// })
 		callManager.hangup('normal', true)
 		dispatch(setCallStatus(CALLSTATUS.idle))
 	}
@@ -280,7 +280,6 @@ function GroupCall(props) {
 			type: "accept",
 			callInfo: state.confr
 		})
-
 		clearTimeout(WebIM.rtc.timer)
 	}
 

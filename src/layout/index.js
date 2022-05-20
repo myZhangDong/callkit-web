@@ -12,7 +12,7 @@ import MiniWindow from '../modules/miniWindow'
 console.log('-----初始化-----');
 
 function Layout({ onAddPerson, onStateChange, onInvite }) {
-
+	const confr = useSelector((state) => state.confr);
 	const size = useSelector((state) => state.windowSize);
 	const callStatus = useSelector((state) => state.callStatus);
 	const cls = classnames('callkit-layout-cantainer', {
@@ -27,10 +27,11 @@ function Layout({ onAddPerson, onStateChange, onInvite }) {
 	const addPerson = () => {
 		onAddPerson && onAddPerson()
 	}
-
+	console.log('Layout callStatus', callStatus)
 	useEffect(() => {
-		if (callStatus === 1) {
-			onInvite && onInvite()
+		if (callStatus === 2) {
+			console.log('confr ---', confr)
+			onInvite && onInvite(confr)
 		}
 	}, [callStatus])
 

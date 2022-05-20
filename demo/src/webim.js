@@ -3,7 +3,7 @@ import { getToken, getRtctoken } from './api'
 import CallKit, { join } from '../../src/index'
 
 let WebIM = window.WebIM || {};
-
+// 41117440#383391
 WebIM.conn = new websdk.connection({ appKey: '41117440#383391' });
 
 WebIM.conn.addEventHandler('connect', {

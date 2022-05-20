@@ -278,7 +278,7 @@ export const addListener = () => {
 
                         // store.dispatch(VideoCallAcctions.setCallStatus(CALLSTATUS.alerting)) // 更改为alerting状态
                         // 收到邀请回调 onInvite
-                        dispatch(setCallStatus(CALLSTATUS.inviting))
+                        dispatch(setCallStatus(CALLSTATUS.alerting))
                     } else {
                         // return store.dispatch(VideoCallAcctions.answerCall('busy', { callId: message.ext.callId, callerDevId: message.ext.callerDevId, to: from }))
                         answerCall('busy', { callId: message.ext.callId, callerDevId: message.ext.callerDevId, to: from })
@@ -286,13 +286,12 @@ export const addListener = () => {
                 } else {
                     try {
                         // manager.sendAlerting(from, message.ext.callerDevId, message.ext.callId) // 回复alerting消息
-
+                        dispatch(updateConfr(message))
                         // 收到邀请回调 onInvite
-                        dispatch(setCallStatus(CALLSTATUS.inviting))
+                        dispatch(setCallStatus(CALLSTATUS.alerting))
                     } catch (e) {
                         console.log('shibai', e)
                     }
-                    dispatch(updateConfr(message))
                 }
             }
         },
@@ -312,7 +311,6 @@ export const addListener = () => {
                 switch (msgInfo.action) {
                     case "invite":
                         console.log('收到群组邀请得消息', msg)
-                        debugger
                         if (msg.from == WebIM.conn.context.jid.name) {
                             return // 自己在另一端发出的邀请
                         }
@@ -326,14 +324,11 @@ export const addListener = () => {
                             if (msgInfo.callId == conf.callId) { // 多人会议中邀请别人
                                 // sendAlerting(from, msgInfo.callerDevId, msgInfo.callId)
                                 // 收到邀请回调 onInvite
-                                dispatch(setCallStatus(CALLSTATUS.inviting))
+                                dispatch(setCallStatus(CALLSTATUS.alerting))
                             } else {
                                 answerCall('busy', { callId: msgInfo.callId, callerDevId: msgInfo.callerDevId, to: from })
                             }
                         }
-
-                        // 收到邀请回调 onInvite
-                        dispatch(setCallStatus(CALLSTATUS.inviting))
 
                         // manager.sendAlerting(from, msgInfo.callerDevId, msgInfo.callId) // 回复alerting消息
 
@@ -342,6 +337,10 @@ export const addListener = () => {
                             to,
                             ext: msgInfo
                         }))
+
+                        // 收到邀请回调 onInvite
+                        dispatch(setCallStatus(CALLSTATUS.alerting))
+
                     case "alert":
                         deviceId = msgInfo.calleeDevId
                         callerDevId = msgInfo.callerDevId
@@ -352,9 +351,12 @@ export const addListener = () => {
                         break;
                     case "confirmRing":
                         console.log('收到confirmRing', msg)
-
                         if (msgInfo.calleeDevId != WebIM.conn.context.jid.clientResource) {
                             console.log('不是自己设备的confirmRing', msg)
+                            // callManager.changeState({
+                            //     type: 'other device',
+                            //     data: msg
+                            // })
                             return // 多端情况另一端的消息
                         }
                         if (!msgInfo.status && callVideo.callStatus < CALLSTATUS.receivedConfirmRing) {
@@ -431,7 +433,7 @@ export const addListener = () => {
                             return // 多端情况另一端的消息
                         }
                         if (msg.from == callVideo.confr.callerIMName) {
-                            callManager.hangup('nomal')
+                            callManager.hangup('cancel')
                             dispatch(setCallStatus(CALLSTATUS.idle))
                         }
                         break;

@@ -107,6 +107,9 @@ function SingleCall(props) {
 
 	useEffect(() => {
 		addListener()
+		return () => {
+			WebIM.rtc.client.removeAllListeners()
+		}
 	}, [])
 
 	useEffect(() => {
@@ -123,15 +126,15 @@ function SingleCall(props) {
 
 	const hangup = () => {
 		let state = store.getState()
-		CallkitProps.onStateChange && CallkitProps.onStateChange({
-			type: "hangup",
-			callInfo: {
-				...state.confr,
-				duration: state.callDuration,
-				groupId: state.groupId,
-				groupName: state.groupName
-			}
-		})
+		// CallkitProps.onStateChange && CallkitProps.onStateChange({
+		// 	type: "hangup",
+		// 	callInfo: {
+		// 		...state.confr,
+		// 		duration: state.callDuration,
+		// 		groupId: state.groupId,
+		// 		groupName: state.groupName
+		// 	}
+		// })
 
 		callManager.hangup('normal', true)
 		dispatch(setCallStatus(CALLSTATUS.idle))

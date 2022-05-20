@@ -37,6 +37,10 @@ class Manager {
 		this.props = props
 	}
 
+	changeState(state) {
+		this.props.onStateChange && this.props.onStateChange(state)
+	}
+
 	setToken(accessToken) {
 		this.accessToken = accessToken;
 	}
@@ -107,7 +111,7 @@ class Manager {
 			from: WebIM.conn.context.jid.name
 		}))
 
-		dispatch(setCallStatus(CALLSTATUS.alerting))
+		dispatch(setCallStatus(CALLSTATUS.inviting))
 	}
 
 	async join() {
@@ -115,6 +119,7 @@ class Manager {
 		const state = getState()
 		const { confr } = state
 		const username = WebIM.conn.context.userId
+		console.log('this', this)
 		const uid = await client.join(this.appId, confr.channel, this.accessToken, this.agoraUid);
 
 		// 通过麦克风采集的音频创建本地音频轨道对象。
