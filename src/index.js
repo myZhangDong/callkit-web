@@ -12,7 +12,6 @@ import { sendTextMsg } from './modules/message'
 window.callkit_store = store;
 export const CallkitContext = React.createContext()
 function Callkit(props) {
-
   return (
     <Provider store={store}>
       <div>
@@ -24,26 +23,33 @@ function Callkit(props) {
   );
 }
 
-Callkit.init = (appId, uid, conn, accessToken) => {
+Callkit.init = (appId, uid, conn) => {
+  console.log('init', appId, uid, conn)
+  if (typeof appId !== 'string') {
+    // throw new Error(`invalid parameter appId: ${appId}`)
+  } else if (typeof uid !== 'string') {
+    // throw new Error(`invalid parameter uid: ${uid}`)
+  } else if (typeof conn !== 'object') {
+    // throw new Error(`invalid parameter conn: ${conn}`)
+  }
   callManager.init(appId, uid, conn)
-  // init(appId, uid, conn, accessToken)
 }
-
-
-// Callkit.join = function (params) {
-//   console.log(params)
-//   join(params)
-// }
 
 Callkit.startCall = function (options) {
   console.log('callVoice options', options)
-  // let options = {
-  //   callType: 1,
-  //   chatType: 'singleChat',
-  //   to: 'zd2',
-  //   agoraUid: WebIM.conn.agoraUid,
-  //   message: '邀请你加入语音',
-  // }
+  if (typeof options.to !== 'string' && !(options.to instanceof Array)) {
+    throw new Error(`invalid parameter options.to: ${options.to}`)
+  } else if (typeof options.channel !== 'string') {
+    throw new Error(`invalid parameter options.channel: ${options.channel}`)
+  } else if (typeof options.accessToken !== 'string') {
+    throw new Error(`invalid parameter options.accessToken: ${options.accessToken}`)
+  } else if (typeof options.agoraUid !== 'string') {
+    // throw new Error(`invalid parameter options.agoraUid: ${options.agoraUid}`)
+  } else if (![0, 1, 2, 3].includes(options.callType)) {
+    throw new Error(`invalid parameter options.callType: ${options.callType}`)
+  } else if (options.chatType === 'groupChat' && !options.groupId) {
+    throw new Error(`The groupId is required`)
+  }
 
   if (options.chatType === 'groupChat' && Array.isArray(options.to)) {
     const callId = WebIM.conn.getUniqueId().toString();
@@ -55,7 +61,6 @@ Callkit.startCall = function (options) {
     }
     options.to.forEach((userId) => {
       params.to = userId
-      // callVoice(params)
       callManager.startCall(params)
     })
 
@@ -63,33 +68,30 @@ Callkit.startCall = function (options) {
     return
   }
   const callId = WebIM.conn.getUniqueId().toString();
-  // const channel = Math.uuid(8)
   const params = {
     ...options,
     callId,
-    // channel
   }
-  // callVoice(params)
   callManager.startCall(params)
   return {
     callId
   }
 }
 
-Callkit.setToken = function (token) {
-  callManager.setToken(token)
-}
-
 Callkit.answerCall = function (result, token) {
+  if (typeof result !== 'boolean') {
+    throw new Error(`invalid parameter result: ${result}`)
+  } else if (typeof token !== 'string') {
+    throw new Error(`invalid parameter token: ${token}`)
+  }
   callManager.answerCall(result, token)
 }
 
 Callkit.setUserIdMap = function (idMap) {
+  if (typeof idMap !== 'object') {
+    throw new Error(`invalid parameter idMap: ${idMap}`)
+  }
   callManager.setUserIdMap(idMap)
-}
-
-Callkit.setCallKitProps = function (props) {
-  callManager.setCallKitProps(props)
 }
 
 export default Callkit;

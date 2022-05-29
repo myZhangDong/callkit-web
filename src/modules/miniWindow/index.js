@@ -2,11 +2,12 @@ import './index.css';
 import Avatar from '../../components/avatar';
 import head from '../../assets/images/head.jpg';
 import classnames from 'classnames';
-import React, { useEffect } from 'react';
+import React, { useEffect, useContext } from 'react';
 import Draggable, { DraggableCore } from 'react-draggable';
 import { useSelector, useDispatch } from 'react-redux';
 import { changeWinSize, CALLSTATUS } from '../../redux/reducer'
 import { WebIM } from '../callManager'
+import { CallkitContext } from '../../index'
 function MiniWindow(props) {
 	const { className } = props;
 	const dispatch = useDispatch()
@@ -14,6 +15,8 @@ function MiniWindow(props) {
 	const { callDuration, callStatus, confr } = state
 	const isVideo = confr.type === 1;
 	const text = callStatus < CALLSTATUS.answerCall ? 'Calling' : callDuration
+	const CallkitProps = useContext(CallkitContext);
+	const { contactAvatar, groupAvatar } = CallkitProps
 	const cls = classnames(className, {
 		'callkit-miniwin-container': true,
 		'callkit-miniwin-minivideo': isVideo,
@@ -40,6 +43,12 @@ function MiniWindow(props) {
 		}
 	}, [state.windowSize])
 
+	let avater;
+	if (confr.type > 1) {
+		avater = groupAvatar ? groupAvatar : head
+	} else {
+		avater = contactAvatar ? contactAvatar : head
+	}
 	const content = isVideo ? (
 		<>
 			<div
@@ -51,7 +60,8 @@ function MiniWindow(props) {
 	) : (
 		<>
 			<Avatar
-				src={head}
+				style={{ borderRadius: groupAvatar ? 'inherit' : '50%' }}
+				src={avater}
 				className="callkit-miniwin-avatar"
 			></Avatar>
 			<span className="callkit-miniwin-text">{text}</span>

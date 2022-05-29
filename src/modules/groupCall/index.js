@@ -11,21 +11,44 @@ import { updateConfr, setCallStatus, CALLSTATUS, updateJoinedMembers, setUidToUs
 import { answerCall } from '../message'
 import { WebIM, callManager } from '../callManager'
 import store from '../../redux';
-import { CallkitContext } from '../../index'
+import { CallkitContext } from '../../index';
+
+const MAXUSERS = 16
 function VideoCall(props) {
 	const { text, className, id } = props;
+	const CallkitProps = useContext(CallkitContext);
+	const { contactAvatar } = CallkitProps
 	const cls = classnames(className, {
 		'callkit-group-video-box-4': true
 	})
+	const data = props.data
+	const audioIconClass = classnames({
+		iconfont: true,
+		'icon-mic_slash': true,
+		'callkit-group-audio-icon2': true,
+		'display-none': data.audio,
+	});
+	const videoIconClass = classnames({
+		iconfont: true,
+		'icon-video_slash': true,
+		'callkit-group-video-icon': true,
+		'display-none': data.video,
+	});
+	const showAvatar = !data.video
 	return (
 		<div className={cls} id={id}>
+			{showAvatar && <div className='callkit-group-video-avatar-box'><Avatar src={contactAvatar || head} className="callkit-group-audio-avatar"></Avatar></div>}
 			<span className='callkit-group-video-name'>{text}</span>
+			<Icon className={audioIconClass}></Icon>
+			<Icon className={videoIconClass}></Icon>
 		</div>
 	);
 }
 
 function AudioCall(props) {
 	const { active, text, mute } = props;
+	const CallkitProps = useContext(CallkitContext);
+	const { contactAvatar } = CallkitProps
 	const cls = classnames({
 		'callkit-group-audio-avatar': true,
 		'callkit-group-audio-active': active,
@@ -39,7 +62,7 @@ function AudioCall(props) {
 	});
 	return (
 		<div className="callkit-group-audio-container">
-			<Avatar src={head} alt="name" className={cls}></Avatar>
+			<Avatar src={contactAvatar || head} alt="name" className={cls}></Avatar>
 			<Icon className={iconClass}></Icon>
 			<div className="callkit-group-audio-username">
 				{text}
@@ -57,6 +80,8 @@ function GroupCall(props) {
 	const uid2userids = useSelector(state => state.uid2userId)
 	const dispatch = useDispatch();
 	const username = WebIM.conn.context.userId
+	const { groupAvatar } = CallkitProps
+	console.log('groupAvatar', groupAvatar)
 	function getControls() {
 		if (state.confr.type === 3) {
 			if (state.callStatus === 2 || state.callStatus === 4) {
@@ -134,69 +159,78 @@ function GroupCall(props) {
 		}
 	}
 	callManager.setCallKitProps(CallkitProps)
+
 	async function addListener() {
 		WebIM.rtc.client.on("user-published", async (user, mediaType) => {
-			console.log('有远端画面 -------- ')
+			let state = store.getState()
+			if (state.joinedMembers.length >= MAXUSERS) return;
 			CallkitProps.onStateChange && CallkitProps.onStateChange({
 				type: "user-published",
 				user,
-				mediaType
+				mediaType,
+				confr: state.confr
 			})
-			console.log(user, mediaType) // user - {uid: 1232}
-			// 开始订阅远端用户。
+			console.log(user, mediaType)
 			if (uid2userids[user.uid]) {
 				user.uid2userid = uid2userids[user.uid] // user.uid2userid - im user
 			} else {
-				// const members = await getConfDetail()
-				// dispatch(setUidToUserId(members))
-
-				// user.uid2userid = members[user.uid]
+				user.uid2userid = user.uid
 			}
 			await WebIM.rtc.client.subscribe(user, mediaType);
-
 			let videoElm = ''
-
 			let joined = {}
-
 			joined = {
 				name: user.uid2userid,
-				videoElm: 'video' + user.uid2userid,
+				videoElm: 'video' + user.uid,
 				type: mediaType,
 				value: user.uid,
-				action: 'add'
+				action: 'add',
+				audio: true,
+				video: true
 			}
-			videoElm = 'video' + user.uid2userid;
+			videoElm = 'video' + user.uid;
 
-			dispatch(updateJoinedMembers(joined))
 
-			// 表示本次订阅的是视频。
+			// subscribe video stream。
 			if (mediaType === "video") {
-				// 订阅完成后，从 `user` 中获取远端视频轨道对象。
 				const remoteVideoTrack = user.videoTrack;
-				// 也可以只传入该 DIV 节点的 ID。
-				// let videoBox = videoElm ? videoElm : joinedMembers.filter((item) => (item.name == user.uid2userid))[0].videoElm
+				joined.video = true
+				dispatch(updateJoinedMembers(joined))
 				setTimeout(() => {
 					remoteVideoTrack.play(videoElm);
 				}, 500)
 			}
 
-			// 表示本次订阅的是音频。
+			// subscribe audio stream。
 			if (mediaType === "audio") {
-				// 订阅完成后，从 `user` 中获取远端音频轨道对象。
+				joined.audio = true
+				dispatch(updateJoinedMembers(joined))
 				const remoteAudioTrack = user.audioTrack;
-				// 播放音频因为不会有画面，不需要提供 DOM 元素的信息。
 				remoteAudioTrack.play();
 			}
 		});
 
-		// 监听远端取消发布
 		WebIM.rtc.client.on("user-unpublished", (user, mediaType) => {
-			console.log('取消发布了')
+			console.log('-- user-unpublished --')
+			let state = store.getState()
 			CallkitProps.onStateChange && CallkitProps.onStateChange({
 				type: "user-unpublished",
 				user,
 				mediaType
 			})
+			const joinedMembersCp = [...state.joinedMembers]
+			joinedMembersCp.forEach((item, index) => {
+				if (item.value == user.uid) {
+					let user = Object.assign({}, item)
+					if (mediaType === 'audio') {
+						user.audio = false
+					} else {
+						user.video = false
+					}
+					joinedMembersCp[index] = user
+				}
+			})
+			dispatch(updateJoinedMembers(joinedMembersCp))
 		});
 
 		WebIM.rtc.client.on("user-left", (user, mediaType) => {
@@ -206,10 +240,10 @@ function GroupCall(props) {
 				mediaType
 			})
 			let state = store.getState()
-			console.log('-- 对方已离开 ---', user, [...state.joinedMembers])
+			console.log('-- user-left --', user, [...state.joinedMembers])
 
 			let joinCurrent = state.joinedMembers.filter((item) => {
-				return item.name !== user.uid2userid
+				return item.value !== user.uid
 			});
 			dispatch(updateJoinedMembers(joinCurrent))
 		})
@@ -218,7 +252,7 @@ function GroupCall(props) {
 		WebIM.rtc.client.on("volume-indicator", (result) => {
 			let isTalkingCp = [...isTalking]
 			result.forEach((volume, index) => {
-				console.log(`**** ${index} UID ${volume.uid} Level ${volume.level} ***`);
+				console.log(`-- ${index} UID ${volume.uid} Level ${volume.level} --`);
 				let userId = uid2userids[volume.uid] // userId - im user id
 				if (!userId) return;
 				if (volume.level > 1 && !isTalkingCp.includes(userId)) {
@@ -230,7 +264,6 @@ function GroupCall(props) {
 					}
 				}
 			});
-			console.log('isTalkingCp +++', isTalkingCp)
 			setTalkings(isTalkingCp)
 		});
 	}
@@ -242,34 +275,48 @@ function GroupCall(props) {
 		}
 	}, [])
 
+	useEffect(() => {
+		console.log('设置 id', uid2userids, state.uid2userId)
+		let newJoined = [...state.joinedMembers]
+		newJoined.forEach((item, index) => {
+			let newJoinedItem = {
+				name: item.name,
+				type: item.type,
+				value: item.value,
+				videoElm: item.videoElm,
+				video: item.video,
+				audio: item.audio
+			}
+			if (newJoinedItem.value in uid2userids) {
+				newJoinedItem.name = uid2userids[newJoinedItem.value]
+			}
+			newJoined[index] = newJoinedItem
+		})
+		dispatch(updateJoinedMembers(newJoined))
+	}, [Object.keys(state.uid2userId).length, state.joinedMembers.length])
+
 
 	const joinConfr = async () => {
-		// await join({ channel: state.confr.channel, callType: state.confr.type })
+		console.log('-- joinConfr --')
 		await callManager.join()
-		// const members = await getConfDetail()
-		// console.log('joinConfr +++', members) // {12312: zd1}
-		// dispatch(setUidToUserId(members))
 	}
 
 	useEffect(() => {
 		if (state.callStatus === CALLSTATUS.confirmRing || state.callStatus === CALLSTATUS.answerCall) {
 			joinConfr()
 		}
-		console.log('state.callStatus ++', state.callStatus)
+		console.log('-- state.callStatus: ', state.callStatus)
 	}, [state.callStatus])
 
 
 	const hangup = () => {
-		// CallkitProps.onStateChange && CallkitProps.onStateChange({
-		// 	type: "hangup",
-		// 	callInfo: {
-		// 		...state.confr,
-		// 		duration: state.callDuration,
-		// 		groupId: state.groupId,
-		// 		groupName: state.groupName
-		// 	}
-		// })
-		callManager.hangup('normal', true)
+		if (state.callStatus < CALLSTATUS.confirmCallee) {
+			// The call has not been connected, send cancel call
+			callManager.hangup('normal', true)
+		} else {
+			// The call has been connected, don't send cancel call
+			callManager.hangup('normal', false)
+		}
 		dispatch(setCallStatus(CALLSTATUS.idle))
 	}
 
@@ -299,20 +346,19 @@ function GroupCall(props) {
 	}
 
 	const swichMic = () => {
-		if (state.callStatus < 3) return
+		if (state.callStatus < CALLSTATUS.confirmRing) return
 		setMute((isMute) => !isMute)
 		WebIM.rtc.localAudioTrack.setEnabled(isMute)
 	}
 
 	const swichCamera = () => {
-		if (state.callStatus < 3) return
+		if (state.callStatus < CALLSTATUS.confirmRing) return
 		setCamera((isCloseCamera) => !isCloseCamera)
 		let status = isCloseCamera ? true : false
 		WebIM.rtc.localVideoTrack.setEnabled && WebIM.rtc.localVideoTrack.setEnabled(status)
 	}
 
-
-	const showAvatar = [0, 1, 3, 6, 7].includes(state.callStatus) ? false : true
+	const showAvatar = [0, 3, 5, 6, 7].includes(state.callStatus) ? false : true
 
 	const callType = state.confr.type === 3 ? 'Audio Call' : 'Video Call'
 	const containerCls = classnames({
@@ -320,12 +366,12 @@ function GroupCall(props) {
 		'callkit-group-flex-start': state.joinedMembers.length > 6,
 		'callkit-group-container-video': state.confr.type === 2
 	})
-	console.log('joinedMembers +++++', state.joinedMembers)
+	console.log('state.joinedMembers', state.joinedMembers)
 	return (
 		<div className={containerCls}>
 
 			{showAvatar && <div className='callkit-group-avatar'>
-				<Avatar src={head} alt="name" style={{ zIndex: 9 }}></Avatar>
+				<Avatar src={groupAvatar || head} style={{ borderRadius: groupAvatar ? 'inherit' : '50%', zIndex: 9 }} alt="name"></Avatar>
 				<div className="callkit-singleCall-username">{state.groupName}</div>
 				<div className="callkit-singleCall-title">{callType}</div>
 			</div>}
@@ -333,21 +379,21 @@ function GroupCall(props) {
 			{
 				state.confr.type === 3 && state.joinedMembers.map((item) => {
 					let talking = isTalking.includes(item.name)
-					return <AudioCall key={item.name} active={talking} text={item.name}></AudioCall>
+					return <AudioCall key={item.name} active={talking} text={item.name} mute={!item.audio}></AudioCall>
 				})
 			}
 
 			{
 				state.confr.type === 2 && state.joinedMembers.map((item) => {
 					let className = ''
-					if (state.joinedMembers.length === 2) {
+					if (state.joinedMembers.length <= 2) {
 						if (item.name === username) {
 							className = 'callkit-group-video-2-self'
 						} else {
 							className = 'callkit-group-video-2-target'
 						}
 					}
-					return <VideoCall key={item.name} text={item.name} id={'video' + item.name} className={className}></VideoCall>
+					return <VideoCall key={item.name} text={item.name} id={'video' + item.value} className={className} data={item}></VideoCall>
 				})
 			}
 

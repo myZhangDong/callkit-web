@@ -9,13 +9,12 @@ function Header(props) {
 	const dispatch = useDispatch();
 	const currentSize = useSelector((state) => state.windowSize);
 	const confr = useSelector((state) => state.confr)
+	const state = useSelector((state) => state)
 	const isGroup = confr.type === 2 || confr.type === 3;
 	console.log('isGroup', isGroup, currentSize)
 	const onZoomWindow = () => {
-		// const size = windowSize === 'small' ? 'full' : 'small';
 		const nextSize = currentSize === 'normal' ? 'large' : 'normal';
 		dispatch(changeWinSize(nextSize));
-		// props.onZoomWindow && props.onZoomWindow(windowSize);
 	};
 
 	const handleClose = () => {
@@ -23,7 +22,18 @@ function Header(props) {
 	};
 
 	const onAddPerson = () => {
-		props.onAddPerson && props.onAddPerson();
+		let confrData = Object.assign({}, confr)
+		confrData.groupId = state.groupId
+		confrData.groupName = state.groupName
+		let joinedMembers = [...state.joinedMembers]
+		confrData.joinedMembers = joinedMembers.map((item) => {
+			return {
+				imUserId: item.name,
+				agoraUid: item.value
+			}
+		})
+		console.log('onAddPerson', confrData)
+		props.onAddPerson && props.onAddPerson(confrData);
 	};
 
 	const headTitle = confr.type === 0 || confr.type === 3 ? 'Audio Call' : 'Video Call'

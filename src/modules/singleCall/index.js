@@ -39,7 +39,6 @@ function VideoCall() {
 				}
 				onClick={swichScreen}
 			></div>
-			{/* <MiniWindow videoSrc="s" text="04:12"></MiniWindow> */}
 		</div>
 	);
 }
@@ -50,42 +49,38 @@ function SingleCall(props) {
 	const [isCloseCamera, setCamera] = useState(false)
 	const state = useSelector(state => state)
 	const dispatch = useDispatch();
+	const { contactAvatar } = CallkitProps
 
 	const { client } = callManager
 	callManager.setCallKitProps(CallkitProps)
+
+	console.log('contactAvatar', contactAvatar)
 	const addListener = () => {
 		client.on("user-published", async (user, mediaType) => {
-			console.log('-- 对方发布流 -- ')
+			console.log('-- target user-published -- ')
 			CallkitProps.onStateChange && CallkitProps.onStateChange({
 				type: "user-published",
 				user,
 				mediaType
 			})
-			// 开始订阅远端用户。
+			// subscribe user
 			await client.subscribe(user, mediaType);
 
-			// 表示本次订阅的是视频。
 			if (mediaType === "video") {
-				// 订阅完成后，从 `user` 中获取远端视频轨道对象。
 				const remoteVideoTrack = user.videoTrack;
-
-				// 也可以只传入该 DIV 节点的 ID。
 				remoteVideoTrack.play('remote-player');
 				WebIM.rtc.remoteVideoTrack = remoteVideoTrack;
 			}
 
-			// 表示本次订阅的是音频。
 			if (mediaType === "audio") {
-				// 订阅完成后，从 `user` 中获取远端音频轨道对象。
 				const remoteAudioTrack = user.audioTrack;
 				WebIM.rtc.other = user
-				// 播放音频因为不会有画面，不需要提供 DOM 元素的信息。
 				remoteAudioTrack.play();
 			}
 		});
 
 		client.on("user-left", (user, mediaType) => {
-			console.log('-- 对方已离开 --')
+			console.log('-- user-left --')
 			let state = store.getState()
 			CallkitProps.onStateChange && CallkitProps.onStateChange({
 				type: "user-left",
@@ -96,7 +91,7 @@ function SingleCall(props) {
 		})
 
 		client.on("user-unpublished", (user, mediaType) => {
-			console.log('取消发布了', user, mediaType)
+			console.log('-- user-unpublished --', user, mediaType)
 			CallkitProps.onStateChange && CallkitProps.onStateChange({
 				type: "user-unpublished",
 				user,
@@ -119,23 +114,11 @@ function SingleCall(props) {
 	}, [state.callStatus])
 
 	const joinConfr = () => {
-		console.log('join -----', state.confr.channel)
-		// join({ channel: state.confr.channel, callType: state.confr.type })
+		console.log('-- join --', state.confr.channel)
 		callManager.join()
 	}
 
 	const hangup = () => {
-		let state = store.getState()
-		// CallkitProps.onStateChange && CallkitProps.onStateChange({
-		// 	type: "hangup",
-		// 	callInfo: {
-		// 		...state.confr,
-		// 		duration: state.callDuration,
-		// 		groupId: state.groupId,
-		// 		groupName: state.groupName
-		// 	}
-		// })
-
 		callManager.hangup('normal', true)
 		dispatch(setCallStatus(CALLSTATUS.idle))
 	}
@@ -156,7 +139,7 @@ function SingleCall(props) {
 
 	const refuse = () => {
 		answerCall('refuse') // 
-		if (state.callStatus < 7) { //拒接
+		if (state.callStatus < CALLSTATUS.confirmCallee) { //拒接
 			callManager.hangup()
 			dispatch(setCallStatus(CALLSTATUS.idle))
 		}
@@ -170,7 +153,7 @@ function SingleCall(props) {
 	}
 
 	const swichMic = () => {
-		if (state.callStatus < 5) return
+		if (state.callStatus < CALLSTATUS.answerCall) return
 		setMute((isMute) => !isMute)
 		WebIM.rtc.localAudioTrack.setEnabled(isMute)
 	}
@@ -184,8 +167,8 @@ function SingleCall(props) {
 
 	function getControls() {
 		if (state.confr.type === 0) {
-			if (state.callStatus === 2 || state.callStatus === 4) {
-				// 受邀请方按钮
+			if (state.callStatus === CALLSTATUS.alerting || state.callStatus === CALLSTATUS.receivedConfirmRing) {
+				// btn for callee
 				return (
 					<>
 						<Button circle danger onClick={refuse}>
@@ -212,8 +195,8 @@ function SingleCall(props) {
 				</>)
 			}
 		} else {
-			if (state.callStatus === 2 || state.callStatus === 4) {
-				// 受邀请方按钮
+			if (state.callStatus === CALLSTATUS.alerting || state.callStatus === CALLSTATUS.receivedConfirmRing) {
+				// btn for callee
 				return (
 					<>
 						{
@@ -271,7 +254,7 @@ function SingleCall(props) {
 	return (
 		<div style={style} className="callkit-singleCall-container">
 			{showAvatar && <>
-				<Avatar src={head} alt="name" style={{ zIndex: 9 }}></Avatar>
+				<Avatar src={contactAvatar || head} alt="name" style={{ zIndex: 9 }}></Avatar>
 				<div className="callkit-singleCall-username">{targetUser}</div>
 				<div className="callkit-singleCall-title">{callType}</div>
 			</>}

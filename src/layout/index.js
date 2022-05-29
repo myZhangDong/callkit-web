@@ -8,8 +8,7 @@ import { useSelector, useDispatch } from 'react-redux';
 import classnames from 'classnames';
 import { client, WebIM } from '../modules/callManager'
 import MiniWindow from '../modules/miniWindow'
-
-console.log('-----初始化-----');
+import { CALLSTATUS } from '../redux/reducer'
 
 function Layout({ onAddPerson, onStateChange, onInvite }) {
 	const confr = useSelector((state) => state.confr);
@@ -24,19 +23,19 @@ function Layout({ onAddPerson, onStateChange, onInvite }) {
 	})
 	const position = size === 'large' ? { x: 0, y: 0 } : null
 
-	const addPerson = () => {
-		onAddPerson && onAddPerson()
+	const addPerson = (confr) => {
+		onAddPerson && onAddPerson(confr)
 	}
 	console.log('Layout callStatus', callStatus)
 	useEffect(() => {
-		if (callStatus === 2) {
-			console.log('confr ---', confr)
+		if (callStatus === CALLSTATUS.alerting) {
+			console.log('-- confr --', confr)
 			onInvite && onInvite(confr)
 		}
 	}, [callStatus])
 
 	return (
-		callStatus > 0 ?
+		callStatus > CALLSTATUS.idle ?
 			<>
 				<Draggable position={position}>
 					<div className={cls}>

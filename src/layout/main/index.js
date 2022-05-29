@@ -6,7 +6,6 @@ import { useSelector, useDispatch } from 'react-redux';
 function Main() {
 	const state = useSelector(state => state)
 	const isGroup = state.confr.type === 2 || state.confr.type === 3
-	// const isGroup = true
 
 	return (
 		<div className="callkit-main-cantainer">

@@ -1,5 +1,4 @@
 import AgoraRTC from 'agora-rtc-sdk-ng';
-import { useSelector, useDispatch } from 'react-redux';
 import axios from 'axios';
 import WebIM from 'easemob-websdk'
 import store from '../redux';
@@ -18,6 +17,7 @@ class Manager {
 
 		this.client = client
 		this.props = {}
+		this.callId = ''
 		WebIM.rtc = this.rtc = {
 			client,
 			localAudioTrack: null,
@@ -54,7 +54,7 @@ class Manager {
 		const { getState, dispatch } = store
 		const state = getState()
 		const { confr } = state
-		console.log('answerCall', result)
+		console.log('-- answerCall --', result)
 		if (result) {
 			this.accessToken = accessToken;
 			sendAlerting(confr.callerIMName, confr.callerDevId, confr.callId)
@@ -67,16 +67,19 @@ class Manager {
 	startCall(options) {
 		const { getState, dispatch } = store
 		const state = getState()
-
-		const { callId, channel, chatType, callType, to, message, groupId, groupName, accessToken } = options;
+		let { callId, channel, chatType, callType, to, message, groupId, groupName, accessToken } = options;
 		this.accessToken = accessToken;
-
+		if (state.confr.callId && state.callStatus > 0) {
+			channel = state.confr.channel
+			callId = state.confr.callId
+			callType = state.confr.type
+		}
 		let confInfo = {
 			action: 'invite',
 			channelName: channel,
-			type: callType, //0为1v1音频，1为1v1视频，2为多人视频 3多人语音
-			callerDevId: WebIM.conn.context.jid.clientResource, // 主叫方设备Id
-			callId: callId, // 随机uuid，每次呼叫都不同，代表一次呼叫
+			type: callType, //0 1v1 audio，1 1v1 video，2 multi video 3 multi audio
+			callerDevId: WebIM.conn.context.jid.clientResource,
+			callId: callId,
 			ts: Date.now(),
 			msgType: 'rtcCallWithAgora',
 			callerIMName: WebIM.conn.context.jid.name,
@@ -89,8 +92,9 @@ class Manager {
 			callerDevId: WebIM.conn.context.jid.clientResource,
 			callId: callId,
 			calleeIMName: to,
-			callerIMName: WebIM.conn.context.jid.name
+			callerIMName: WebIM.conn.context.jid.name,
 		}
+		this.callId = callId
 		if (chatType === 'groupChat') {
 			confInfo.ext = {
 				groupId: groupId,
@@ -110,27 +114,35 @@ class Manager {
 			to: to,
 			from: WebIM.conn.context.jid.name
 		}))
-
-		dispatch(setCallStatus(CALLSTATUS.inviting))
+		if (state.callStatus < CALLSTATUS.inviting) {
+			dispatch(setCallStatus(CALLSTATUS.inviting))
+		}
 	}
 
 	async join() {
 		const { getState, dispatch } = store
-		const state = getState()
-		const { confr } = state
+		let state = getState()
+		if (state.callStatus === CALLSTATUS.confirmCallee) {
+			return
+		}
+		let { confr } = state
 		const username = WebIM.conn.context.userId
-		console.log('this', this)
-		const uid = await client.join(this.appId, confr.channel, this.accessToken, this.agoraUid);
+		const uid = await client.join(this.appId, confr.channel, this.accessToken, Number(this.agoraUid));
 
-		// 通过麦克风采集的音频创建本地音频轨道对象。
 		const localAudioTrack = await AgoraRTC.createMicrophoneAudioTrack();
 		this.rtc.localAudioTrack = localAudioTrack
 		let config = [localAudioTrack]
 
-		console.log('confr *****', confr)
+		console.log('-- confr --', confr)
 		if (confr.type === 0 || confr.type === 3) {
 			await client.publish(config);
 			// rtc.localAudioTrack.play();
+			if (confr.type === 3) {
+				// let joinedMembersCp = [...state.joinedMembers]
+				// joinedMembersCp.push({ videoElm: null, name: username, type: 'audio', value: uid, actionType: 'add' })
+
+				dispatch(updateJoinedMembers({ videoElm: null, name: username, type: 'audio', value: uid, action: 'add', audio: true, video: false }))
+			}
 		} else {
 			// 通过摄像头采集的视频创建本地视频轨道对象。
 			const localVideoTrack = await AgoraRTC.createCameraVideoTrack();
@@ -138,32 +150,26 @@ class Manager {
 			this.rtc.localVideoTrack = localVideoTrack;
 			await client.publish(config);
 			if (confr.type === 2) {
-				let videoElm = 'video' + username;
-
-				let joinedMembersCp = [...state.joinedMembers]
-				joinedMembersCp.push({ videoElm: videoElm, name: username, type: 'video', value: uid })
-				dispatch(updateJoinedMembers(joinedMembersCp))
-
-				let params = {
-					username: username,
-					channelName: confr.channel,
-					appkey: WebIM.conn.appKey
-				}
-
+				let videoElm = 'video' + uid;
 				// TODO 需要设计接口
 				// const members = await getConfDetail(params)
 				// dispatch(setUidToUserId(members))
 
-				setTimeout(() => {
-					localVideoTrack.play(videoElm);
-				}, 500)
+				// setTimeout(() => {
+				let joinedMembersCp = [...state.joinedMembers]
+				joinedMembersCp.push({ videoElm: videoElm, name: username, type: 'video', value: uid, actionType: 'add' })
+				console.log('自己加入展示画面', joinedMembersCp)
+				dispatch(updateJoinedMembers({ videoElm: videoElm, name: username, type: 'video', value: uid, action: 'add', audio: true, video: true }))
+
+				localVideoTrack.play(videoElm);
+				// }, 500)
 
 			} else {
 				localVideoTrack.play("local-player");
 			}
 		}
 		this.startTime()
-		console.log("publish success! --- ");
+		console.log("-- publish success! --- ");
 	}
 
 	startTime() {
@@ -190,11 +196,10 @@ class Manager {
 	}
 
 	async hangup(reson, isCancel) {
-		const { getState, dispatch } = store
 		this.rtc.localAudioTrack && this.rtc.localAudioTrack.close();
 		this.rtc.localVideoTrack && this.rtc.localVideoTrack.close();
 		this.rtc.intervalTimer && clearInterval(this.rtc.intervalTimer)
-
+		const { getState, dispatch } = store
 		const state = getState()
 		const { confr } = state
 		if (isCancel && confr.callerIMName == WebIM.conn.context.jid.name) {
@@ -211,9 +216,8 @@ class Manager {
 				groupName: state.groupName
 			}
 		})
-
+		this.callId = '';
 		this.rtc.client && await this.rtc.client.leave();
-
 		dispatch(setCallStatus(CALLSTATUS.idle))
 		dispatch(setCallDuration('00:00'))
 		dispatch(changeWinSize('normal'))
@@ -229,28 +233,3 @@ export const callManager = new Manager();
 
 export { client, WebIM }
 
-function getRtctoken(params) {
-	let agoraId = ''
-	const conn = WebIM.conn;
-	const appKey = conn.context.appKey
-	const username = conn.context.userId
-	axios.defaults.headers.common['Authorization'] =
-		'Bearer ' + conn.context.accessToken;
-	const { channel } = params;
-	// const url = `${conn.apiUrl
-	// 	}/token/rtcToken/v1?userAccount=${username}&channelName=${channel}&appkey=${encodeURIComponent(
-	// 		appKey
-	// 	)}`
-
-	const url = `${conn.apiUrl}/token/rtc/channel/${channel}/agorauid/${agoraId}?userAccount=${username}`
-
-	return axios
-		.get(url)
-		.then(function (response) {
-			console.log('getRtctoken', response)
-			return response.data;
-		})
-		.catch(function (error) {
-			console.log(error);
-		});
-}

@@ -36,18 +36,17 @@ export const counterSlice = createSlice({
 	},
 	reducers: {
 		changeWinSize: (state, action) => {
-			console.log('action', action);
 			state.windowSize = action.payload;
 		},
 		setCallStatus: (state, action) => {
-			console.log('状态：', action.payload)
+			console.log('-- setCallStatus：', action.payload)
 			state.callStatus = action.payload;
 		},
 		setCallDuration: (state, action) => {
 			state.callDuration = action.payload;
 		},
 		updateConfr: (state, action) => {
-			console.log('--updateConfr--', action)
+			console.log('-- updateConfr --', action)
 			let msg = action.payload
 			let confrInfo = action.payload.ext || {}
 			// let confrInfo = msg.customExts || {}
@@ -62,7 +61,7 @@ export const counterSlice = createSlice({
 				calleeDevId: confrInfo.calleeDevId
 			}
 
-			if (confrInfo.type === 2) {
+			if (confrInfo.type === 2 || confrInfo.type === 3) {
 				confr.confrName = msg.to
 			} else {
 				confr.confrName = msg.from
@@ -89,14 +88,21 @@ export const counterSlice = createSlice({
 		},
 
 		updateJoinedMembers: (state, action, oth) => {
-			console.log('updateJoinedMembers', action, oth)
+			console.log('-- updateJoinedMembers --', action, oth)
 			const actionType = action.payload.action
 			if (actionType === 'add') {
 				let exist = false;
 				let joinedMembers = [...state.joinedMembers]
 				joinedMembers.forEach((item, index) => {
 					console.log('00000', item, action)
-					if (item.name === action.payload.name) {
+					if (item.name === action.payload.name || item.value === action.payload.name) {
+						if (item.value === action.payload.name) {
+							item.videoElm = action.payload.videoElm
+							item.mediaType = action.payload.mediaType
+							item.audio = action.payload.audio || false
+							item.video = action.payload.video || false
+							state.joinedMembers = joinedMembers
+						}
 						exist = true
 					}
 				})
