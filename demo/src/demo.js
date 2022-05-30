@@ -1,110 +1,89 @@
-import React, { useEffect, useState } from 'react';
-import ReactDOM from 'react-dom/client';
-import CallKit, { join } from '../../src/index'
-import WebIM from './webim'
-import { getToken, getRtctoken, getConfDetail } from './api'
 
+import CallKit, { join } from '../../src/index'
+import './index.css';
+import { WebIM } from './webim'
+import React, { useState } from 'react';
+import { getLoginToken, getRtctoken } from './api'
+import { appId } from './config'
 
 function App() {
-    const [username, setUsername] = useState('')
-    let agoraToken
-    const login = () => {
-        getToken(username, 'nickname').then((res) => {
-            console.log('getToken', res)
-            const { accessToken, agoraUid } = res
-            WebIM.conn.agoraUid = agoraUid
-            agoraToken = accessToken
-            WebIM.conn.open({
-                user: username,
-                agoraToken: accessToken
-            }).then((res) => {
-                console.log('登录成功', res)
-                let appId = '15cb0d28b87b425ea613fc46f7c9f974';
-                CallKit.init(appId, agoraUid, WebIM.conn)
+    const [userInfo, setUserInfo] = useState({})
+
+    const login = async () => {
+        console.log(userInfo)
+        const { accessToken, agoraUid } = await getLoginToken(userInfo.userId, userInfo.displayedName)
+        WebIM.conn.agoraUid = agoraUid
+        WebIM.conn.open({
+            user: userInfo.userId,
+            agoraToken: accessToken,
+        })
+        CallKit.init(appId, agoraUid, WebIM.conn)
+    }
+
+    const handleChange = (type) => {
+        return (e) => {
+            console.log('type', type)
+            console.log(e.target.value)
+            setUserInfo((info) => {
+                return {
+                    ...info,
+                    [type]: e.target.value
+                }
             })
+        }
+    }
+
+    const startCall = async () => {
+        const channel = Math.uuid(8)
+        const type = 1
+        const { accessToken } = await getRtctoken({
+            channel: channel,
+            agoraId: WebIM.conn.agoraUid,
+            username: WebIM.conn.context.userId
         })
-    }
 
-    const joinConf = () => {
-        CallKit.join({ channel: '123', connection: WebIM.conn })
-    }
-
-    const handleChange = (e) => {
-        setUsername(e.target.value)
-    }
-
-    const inviteAudioCall = async () => {
         let options = {
-            callType: 0,
+            callType: type,
             chatType: 'singleChat',
-            to: 'zd2',
-            agoraUid: WebIM.conn.agoraUid,
-            message: '邀请你加入语音',
+            to: userInfo.targetId,
+            message: `invite you to video call`,
+            accessToken,
+            channel
         }
+        CallKit.startCall(options)
+    }
 
-        const channel = Math.uuid(8)
-        let rtcToken = await getRtctoken({
-            channel: channel,
+    const handleInvite = async (data) => {
+        console.log('handleInvite data', data)
+        const { accessToken } = await getRtctoken({
+            channel: data.channel,
             agoraId: WebIM.conn.agoraUid,
             username: WebIM.conn.context.userId
         })
-        let accessToken = rtcToken.accessToken
 
-        options.channel = channel;
-        options.accessToken = accessToken
-        console.log(rtcToken)
-        CallKit.startCall(options)
-
-        // CallKit.startCall('groupChat', 'zd2', '邀请你加入语音', 'audio', '146188268535809', '群名')
-    }
-
-    const inviteVideoCall = async () => {
-        let options = {
-            callType: 2,
-            chatType: 'groupChat',
-            to: ['zd2'],
-            agoraUid: WebIM.conn.agoraUid,
-            message: '邀请你加入语音',
-            groupId: '180901348704257',
-            groupName: 'RTC'
-        }
-        const channel = Math.uuid(8)
-        let rtcToken = await getRtctoken({
-            channel: channel,
-            agoraId: WebIM.conn.agoraUid,
-            username: WebIM.conn.context.userId
-        })
-        let accessToken = rtcToken.accessToken
-
-        options.channel = channel;
-        options.accessToken = accessToken
-        console.log(rtcToken)
-        CallKit.startCall(options)
-
-        let members = await getConfDetail(WebIM.conn.context.userId, channel)
-        CallKit.setUserIdMap(members)
-        // CallKit.startCall('singleChat', 'zd2', '邀请你加入语音', 'video')
-        // CallKit.startCall('groupChat', ['zd2', 'zd4'], '邀请你加入语音', 'video', '146188268535809', '群名')
-        // CallKit.startCall('groupChat', 'zd4', '邀请你加入语音', 'video', '146188268535809', '群名')
-    }
-
-    const handleInvite = (data) => {
-        console.log('有人邀请我', data)
+        CallKit.answerCall(true, accessToken)
     }
 
     return (
-        <>
-            <h1>callkit Demo</h1>
-            <label>用户名</label>
-            <input onChange={handleChange}></input>
-            <br />
-            <button onClick={login}>登录</button>
-            <button onClick={joinConf}>加入会议</button>
-            <button onClick={inviteAudioCall}>发送语音邀请</button>
-            <button onClick={inviteVideoCall}>发送视频邀请</button>
-            <CallKit onInvite={handleInvite}></CallKit>
-        </>
-    )
+        <div className="App">
+            <h1>CallKit Demo</h1>
+            <div className='form-container'>
+                <label>User ID</label>
+                <input onChange={handleChange('userId')} className="input"></input>
+
+                <label>Displayed Profile Name</label>
+                <input onChange={handleChange('displayedName')} className="input"></input>
+                <button onClick={login} className="button">Login</button>
+
+                <br />
+                <label>Target User ID</label>
+                <input onChange={handleChange('targetId')} className="input"></input>
+                <button onClick={startCall} className="button">startCall</button>
+            </div>
+
+            <CallKit agoraUid={WebIM.conn.agoraUid} onInvite={handleInvite}></CallKit>
+        </div>
+    );
 }
 
-export default App
+export default App;

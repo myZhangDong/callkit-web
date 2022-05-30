@@ -162,12 +162,12 @@ function Call() {
 ### API 列表
 
 方法：
-| 方法 | 说明 |
+| 方法 | 说明 | 
 |--------- | -------|
 | init | 初始化 CallKit |
 | startCall | 发起通话 |
 | answerCall | 接听通话 |
-| setUserIdMap | 设置声网 ID 映射 |
+| setUserIdMap | 设置声网 ID 映射 | 
 
 回调：
 | 方法 | 说明 |
